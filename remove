@@ -1,0 +1,78 @@
+#!/bin/bash
+IFS_BACKUP=$IFS
+IFS=$'\n'
+TRASH_DIR="$HOME/.local/share/Trash/files"		#define the trash path
+TRASH_INFO="$HOME/.local/share/Trash/info"		#define the trash path
+MAXSIZE=10  # g
+cmd=$1
+function get_abspath()
+{
+	local FILE_PATH="${i}"			# 如果路径最后有 '/'，需要去掉，否则无法获取绝对路径
+	if [[ ${FILE_PATH} =~ /$ ]] ; then
+		FILE_PATH=${FILE_PATH:0:-1}
+	fi
+	# 对于相对路径，把他的绝对路径补齐
+	if [[ ${FILE_PATH} =~ ^/ ]] ; then
+		FILE_PATH=${FILE_PATH}
+	else
+		FILE_PATH="$(pwd)/${FILE_PATH}"
+	fi
+	echo ${FILE_PATH}
+}
+if [[ $1 != '-f' ]]; then
+	if [[ ${cmd:0:1} != "-" ]] && [[ $cmd != "" ]]; then
+		for i in ${@}
+		do
+			if [[ ! -e "$i" ]]; then
+				echo "RM: No such file or directory: $i"
+			else
+				BASENAME=`basename $i`
+				CUT_NAME=`basename $i`
+				PATH_NAME=`get_abspath $i`
+				DATE=`date +"%Y-%m-%dT%H:%M.%S"`
+				if [[ -d $CUT_NAME ]]; then
+					CUT_NAME="$BASENAME.tar"
+					FILENAME=${PATH_NAME%/*}
+					tar --force-local -cf "$CUT_NAME" -C "$FILENAME" "$BASENAME" --remove-files
+					FILENAME="$CUT_NAME"
+					PATH_NAME=$PATH_NAME"/"
+				else
+					FILENAME="$CUT_NAME"
+					CUT_NAME="$PATH_NAME"
+				fi
+				mv $CUT_NAME $TRASH_DIR/$FILENAME
+				echo "RM: $PATH_NAME moved to trash: $TRASH_DIR"
+				touch "$TRASH_INFO/${BASENAME}.trashinfo"
+				echo -e "[trash info]" >> "$TRASH_INFO/${BASENAME}.trashinfo"
+				echo -e "Path=$PATH_NAME" >> "$TRASH_INFO/${BASENAME}.trashinfo"
+				echo -e "DeletionDate=$DATE" >> "$TRASH_INFO/${BASENAME}.trashinfo"
+			fi
+		done
+	elif
+		[[ ${cmd:0:1} = "-" ]] || [[ ${cmd:0:1} = "" ]]; then
+		echo "CMD_ERROR:rm $1"
+		echo "CMD:rm <Dir/File>				--Remove"
+		echo "CMD:rm -f <Dir/File>				--ForceDel"
+	fi
+else
+	for i in $@
+	do
+		if [[ ${i:0:1} != "-" ]]; then
+
+			if [[ ! -e $i ]]; then
+				echo "RM: No such file or directory: $i"
+			else
+				PATH_NAME=`get_abspath $i`
+				CUT_NAME=$PATH_NAME
+				/bin/rm -rf $CUT_NAME
+				echo  "RM: ForceDel: $PATH_NAME"
+			fi
+		fi
+	done
+fi
+rubbishSize=$(echo du -s $TRASH_DIR/ | awk '{print int($1/1024/1024)}')
+if [ $rubbishSize -gt $MAXSIZE ]; then
+	echo "RM: The Size of rubbish is $rubbishSize G"
+	echo "RM: The rubbish can been cleaned up with 'cleantrash'"
+fi
+IFS=$IFS_BACKUP
